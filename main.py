@@ -8,7 +8,7 @@ import io
 conn = sqlite3.connect('fb_operasyon_merkezi_v2.db', check_same_thread=False)
 c = conn.cursor()
 
-# Tabloları Başlat
+# Tabloları Başlat (Eksik sütun varsa ekler)
 c.execute('''CREATE TABLE IF NOT EXISTS siparisler (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sicil_no TEXT, uye_adi TEXT, urunler TEXT, adet INTEGER DEFAULT 1,
@@ -59,7 +59,6 @@ else:
     if secim == "Sipariş Takip / Operasyon":
         st.header("🔎 Detaylı Arama ve Operasyon")
         
-        # Arama Paneli
         with st.expander("🔍 Üye Bul (ID, Sicil No veya İsim ile)", expanded=True):
             c1, c2, c3 = st.columns(3)
             search_id = c1.text_input("ID'ye göre ara")
@@ -67,8 +66,11 @@ else:
             search_name = c3.text_input("İsim Soyad'a göre ara")
             search_btn = st.button("Kayıtları Filtrele")
 
-        # Veri Filtreleme Mantığı
-        query = "SELECT id as 'ID', sicil_no as 'Sicil No', uye_adi as 'Ad Soyad', urunler as 'Ürünler', adet as 'Adet', durum as 'Durum', kargo_no as 'Kargo No', kargo_tarihi as 'Kargo Tarihi' FROM siparisler"
+        # Veri Sorgusu (Sütunların sonuna 'Kayıt Tarihi' eklendi)
+        query = """SELECT id as 'ID', sicil_no as 'Sicil No', uye_adi as 'Ad Soyad', 
+                   urunler as 'Ürünler', adet as 'Adet', durum as 'Durum', 
+                   kargo_no as 'Kargo No', kargo_tarihi as 'Kargo Tarihi', tarih as 'Kayıt Tarihi' 
+                   FROM siparisler"""
         params = []
         conditions = []
         
@@ -93,7 +95,6 @@ else:
             st.dataframe(df, use_container_width=True, hide_index=True)
             st.divider()
             
-            # Güncelleme Formu
             st.subheader("🛠️ Toplu veya Tekil Güncelleme")
             df['secim_etiketi'] = df['Sicil No'].astype(str) + " - " + df['Ad Soyad'] + " (ID: " + df['ID'].astype(str) + ")"
             etiket_to_id = dict(zip(df['secim_etiketi'], df['ID']))
