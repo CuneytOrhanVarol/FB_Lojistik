@@ -7,6 +7,7 @@ from datetime import datetime
 conn = sqlite3.connect('fb_operasyon_merkezi.db', check_same_thread=False)
 c = conn.cursor()
 
+# Tabloları Başlat
 c.execute('''CREATE TABLE IF NOT EXISTS siparisler (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     uye_adi TEXT, sicil_no TEXT, urunler TEXT, tisort_beden TEXT, 
@@ -36,7 +37,7 @@ if 'kullanici' not in st.session_state:
     st.title("FB Operasyon Merkezi Giriş")
     user = st.selectbox("Kullanıcı Seçin", list(KULLANICILAR.keys()))
     sifre = st.text_input("Şifre", type="password")
-    if st.button("Giriş"):
+    if st.button("Sisteme Giriş Yap"):
         if KULLANICILAR[user] == sifre:
             st.session_state['kullanici'] = user
             st.session_state['yetki'] = "Yönetici" if user in YONETICILER else "Tedarikçi"
@@ -46,84 +47,121 @@ if 'kullanici' not in st.session_state:
             st.error("Hatalı şifre!")
 else:
     mevcut_user = st.session_state['kullanici']
-    st.sidebar.title(f"Hoş geldin, {mevcut_user}")
-    secim = st.sidebar.radio("Menü", ["Sipariş Takip / Operasyon", "Yeni Kayıt & İçeri Aktar", "İşlem Geçmişi (Log)", "Dışarı Aktar (Excel)"])
-
-    # --- 1. SİPARİŞ TAKİP (GELİŞMİŞ TABLO GÖRÜNÜMÜ) ---
-    if secim == "Sipariş Takip / Operasyon":
-        st.header("Operasyon İzleme Ekranı")
+    
+    # --- Yan Menü (Sidebar) ---
+    st.sidebar.image("https://upload.wikimedia.org/wikipedia/tr/f/ff/Fenerbah%C3%A7e_SK.png", width=100)
+    st.sidebar.title(f"Hoş geldin,\n{mevcut_user}")
+    
+    # Yenileme Butonu
+    if st.sidebar.button("🔄 Verileri Yenile"):
+        st.rerun()
         
-        # Verileri çek
-        df = pd.read_sql_query("SELECT id, sicil_no, uye_adi, urunler, durum, kargo_no, tarih FROM siparisler ORDER BY id DESC", conn)
+    secim = st.sidebar.radio("Menü Seçenekleri", ["Sipariş Takip / Operasyon", "Yeni Kayıt & İçeri Aktar", "İşlem Geçmişi (Log)", "Dışarı Aktar (Excel)"])
+
+    # --- 1. SİPARİŞ TAKİP (TABLO GÖRÜNÜMÜ) ---
+    if secim == "Sipariş Takip / Operasyon":
+        st.header("Sipariş Takip ve Operasyon Paneli")
+        
+        # Veritabanından verileri çek
+        query = "SELECT id as 'ID', sicil_no as 'Sicil No', uye_adi as 'Ad Soyad', urunler as 'Ürünler', durum as 'Durum', kargo_no as 'Kargo No', tarih as 'Kayıt Tarihi' FROM siparisler ORDER BY id DESC"
+        df = pd.read_sql_query(query, conn)
         
         if not df.empty:
-            # Tabloyu göster
+            # Tabloyu göster (Sicil, İsim ve Ürünler yan yana)
             st.dataframe(df, use_container_width=True, hide_index=True)
             
             st.divider()
-            st.subheader("Durum Güncelleme")
             
             # Güncelleme Formu
-            with st.expander("Seçili Siparişi Güncelle"):
-                col1, col2, col3 = st.columns(3)
-                secilen_id = col1.selectbox("Sipariş ID (En soldaki numara)", df['id'].tolist())
-                yeni_statü = col2.selectbox("Yeni Durum", ["Sipariş Alındı", "Tedarik: Rozet (Engin B.)", "Tedarik: Plaket (Mevlüt B.)", "İpek Kutu'ya Sevk Edildi", "Kargoda", "Tamamlandı"])
-                kargo_input = col3.text_input("Kargo No (Kargodaysa girin)")
+            st.subheader("📦 Durum Güncelle")
+            with st.expander("Sipariş Durumunu veya Kargo Numarasını Değiştir"):
+                c1, c2, c3 = st.columns([1, 2, 2])
+                secilen_id = c1.selectbox("ID Seçin", df['ID'].tolist())
+                yeni_statü = c2.selectbox("Yeni Durum", [
+                    "Sipariş Alındı", 
+                    "Tedarik: Rozet (Engin B.)", 
+                    "Tedarik: Plaket (Mevlüt B.)", 
+                    "İpek Kutu'ya Sevk Edildi", 
+                    "Kargoda", 
+                    "Tamamlandı",
+                    "Kulüpten Teslim"
+                ])
+                kargo_input = c3.text_input("Kargo Takip No (Kargodaysa)")
                 
-                if st.button("Durumu Kaydet"):
+                if st.button("Değişiklikleri Kaydet"):
                     c.execute("UPDATE siparisler SET durum = ?, kargo_no = ? WHERE id = ?", (yeni_statü, kargo_input, secilen_id))
                     conn.commit()
-                    log_ekle(mevcut_user, f"ID:{secilen_id} durumunu '{yeni_statü}' yaptı.")
-                    st.success("Güncellendi!")
+                    log_ekle(mevcut_user, f"ID:{secilen_id} nolu siparişi '{yeni_statü}' olarak güncelledi.")
+                    st.success(f"ID:{secilen_id} başarıyla güncellendi!")
                     st.rerun()
         else:
-            st.info("Henüz kayıtlı sipariş bulunmuyor.")
+            st.info("Henüz sistemde kayıtlı sipariş yok.")
 
     # --- 2. YENİ KAYIT & İÇERİ AKTAR ---
     elif secim == "Yeni Kayıt & İçeri Aktar":
-        tab1, tab2 = st.tabs(["Tekil Kayıt", "Toplu İçeri Aktar (Excel/CSV)"])
+        t1, t2 = st.tabs(["✍️ Tek Tek Ekle", "📂 Excel/CSV ile Toplu Yükle"])
         
-        with tab1:
-            with st.form("tekil_form"):
-                u_ad = st.text_input("Ad Soyad")
-                u_sicil = st.text_input("Sicil No")
-                u_urun = st.multiselect("Ürünler", ["Üyelik Kiti", "Üyelik Kartı", "Üyelik Sertifikası", "Üyelik Rozeti", "Üyelik Tişörtü", "Kutu ve Cam Kristal Plaket"])
-                u_submit = st.form_submit_button("Siparişi Ekle")
-                if u_submit:
-                    tarih = datetime.now().strftime("%d/%m/%Y")
-                    c.execute("INSERT INTO siparisler (uye_adi, sicil_no, urunler, durum, tarih) VALUES (?,?,?,?,?)",
-                              (u_ad, u_sicil, ", ".join(u_ad), "Sipariş Alındı", tarih))
-                    conn.commit()
-                    log_ekle(mevcut_user, f"Yeni sipariş eklendi: {u_ad}")
-                    st.success("Kaydedildi!")
+        with t1:
+            with st.form("tekil_ekle"):
+                f_ad = st.text_input("Üye Adı Soyadı")
+                f_sicil = st.text_input("Sicil Numarası")
+                f_urun = st.multiselect("Sipariş Edilen Ürünler", [
+                    "Üyelik Kiti", "Üyelik Kartı", "Üyelik Sertifikası", 
+                    "Üyelik Rozeti", "Üyelik Tişörtü", "Kutu ve Cam Kristal Plaket"
+                ])
+                f_not = st.text_area("Notlar")
+                if st.form_submit_button("Siparişi Kaydet"):
+                    if f_ad and f_sicil:
+                        tarih_bugun = datetime.now().strftime("%d/%m/%Y")
+                        urun_listesi = ", ".join(f_urun)
+                        c.execute("INSERT INTO siparisler (uye_adi, sicil_no, urunler, durum, tarih, notlar) VALUES (?,?,?,?,?,?)",
+                                  (f_ad, f_sicil, urun_listesi, "Sipariş Alındı", tarih_bugun, f_not))
+                        conn.commit()
+                        log_ekle(mevcut_user, f"Yeni sipariş oluşturdu: {f_ad}")
+                        st.success("Sipariş başarıyla eklendi!")
+                    else:
+                        st.error("Ad ve Sicil No boş bırakılamaz.")
 
-        with tab2:
-            st.info("Excel dosyanızda 'sicil_no', 'uye_adi', 'urunler' sütunları olmalıdır.")
-            uploaded_file = st.file_uploader("Dosya Seçin", type=['xlsx', 'csv'])
-            if uploaded_file:
-                df_upload = pd.read_excel(uploaded_file) if uploaded_file.name.endswith('xlsx') else pd.read_csv(uploaded_file)
-                st.write("Yüklenecek Veri Önizlemesi:")
-                st.dataframe(df_upload.head())
-                if st.button("Tümünü Sisteme Aktar"):
-                    for _, row in df_upload.iterrows():
-                        tarih = datetime.now().strftime("%d/%m/%Y")
-                        c.execute("INSERT INTO siparisler (uye_adi, sicil_no, urunler, durum, tarih) VALUES (?,?,?,?,?)",
-                                  (str(row['uye_adi']), str(row['sicil_no']), str(row['urunler']), "Sipariş Alındı", tarih))
-                    conn.commit()
-                    log_ekle(mevcut_user, "Excel ile toplu yükleme yapıldı.")
-                    st.success("Tüm veriler başarıyla aktarıldı!")
+        with t2:
+            st.markdown("### Toplu Yükleme")
+            st.write("Dosyanızda şu başlıklar olmalı: **sicil_no**, **uye_adi**, **urunler**")
+            up_file = st.file_uploader("Dosya Seç (XLSX veya CSV)", type=['xlsx', 'csv'])
+            if up_file:
+                try:
+                    if up_file.name.endswith('.csv'):
+                        df_up = pd.read_csv(up_file, encoding='utf-8-sig')
+                    else:
+                        df_up = pd.read_excel(up_file)
+                    
+                    st.write("Yüklenecek Veri Önizlemesi:")
+                    st.dataframe(df_up.head())
+                    
+                    if st.button("Verileri Sisteme Aktar"):
+                        for _, r in df_up.iterrows():
+                            tarih_up = datetime.now().strftime("%d/%m/%Y")
+                            c.execute("INSERT INTO siparisler (uye_adi, sicil_no, urunler, durum, tarih) VALUES (?,?,?,?,?)",
+                                      (str(r['uye_adi']), str(r['sicil_no']), str(r['urunler']), "Sipariş Alındı", tarih_up))
+                        conn.commit()
+                        log_ekle(mevcut_user, "Excel/CSV ile toplu sipariş yükledi.")
+                        st.success(f"{len(df_up)} adet sipariş başarıyla aktarıldı!")
+                        st.rerun()
+                except Exception as e:
+                    st.error(f"Hata: {e}")
 
-    # --- DİĞER MENÜLER (Görüntüleme) ---
+    # --- 3. İŞLEM GEÇMİŞİ ---
     elif secim == "İşlem Geçmişi (Log)":
-        st.header("Sistem Hareketleri")
-        log_df = pd.read_sql_query("SELECT * FROM islem_gecmisi ORDER BY id DESC", conn)
-        st.dataframe(log_df, use_container_width=True)
+        st.header("Sistem Hareketleri (Log Kayıtları)")
+        log_data = pd.read_sql_query("SELECT zaman as 'Tarih/Saat', kullanici as 'Kullanıcı', islem as 'Yapılan İşlem' FROM islem_gecmisi ORDER BY id DESC", conn)
+        st.table(log_data)
 
+    # --- 4. DIŞARI AKTAR ---
     elif secim == "Dışarı Aktar (Excel)":
-        st.header("Verileri Dışarı Aktar")
+        st.header("Veritabanı Yedekle / Excel Al")
         full_df = pd.read_sql_query("SELECT * FROM siparisler", conn)
-        st.download_button("Excel/CSV İndir", full_df.to_csv(index=False).encode('utf-8-sig'), "fb_export.csv", "text/csv")
+        csv_data = full_df.to_csv(index=False).encode('utf-8-sig')
+        st.download_button("📥 Tüm Veriyi Excel (CSV) Olarak İndir", csv_data, "fb_lojistik_yedek.csv", "text/csv")
 
+    # Çıkış
     if st.sidebar.button("Güvenli Çıkış"):
         del st.session_state['kullanici']
         st.rerun()
