@@ -67,9 +67,15 @@ else:
             st.divider()
             
             st.subheader("🛠️ Toplu veya Tekil Güncelleme")
+            
+            # Seçim için isim ve sicil no birleştirme
+            df['secim_etiketi'] = df['Sicil No'].astype(str) + " - " + df['Ad Soyad'] + " (ID: " + df['ID'].astype(str) + ")"
+            etiket_to_id = dict(zip(df['secim_etiketi'], df['ID']))
+            
             with st.form("güncelleme_formu"):
                 col1, col2 = st.columns(2)
-                secilen_id_listesi = col1.multiselect("Güncellenecek ID'leri Seçin", df['ID'].tolist())
+                # Artık buradan isim veya sicil no ile arama yapılabiliyor
+                secilen_etiketler = col1.multiselect("Güncellenecek Kişileri Seçin (Sicil No veya İsim ile arayın)", df['secim_etiketi'].tolist())
                 yeni_statü = col2.selectbox("Yeni Durum Seçin", DURUMLAR)
                 
                 col3, col4 = st.columns(2)
@@ -79,20 +85,21 @@ else:
                 update_button = st.form_submit_button("Seçili Kayıtları Güncelle")
                 
                 if update_button:
-                    if not secilen_id_listesi:
-                        st.warning("Lütfen güncellenecek en az bir ID seçin.")
+                    if not secilen_etiketler:
+                        st.warning("Lütfen güncellenecek en az bir kişi seçin.")
                     else:
+                        secilen_id_listesi = [etiket_to_id[e] for e in secilen_etiketler]
                         for s_id in secilen_id_listesi:
                             c.execute("""UPDATE siparisler SET durum = ?, kargo_no = ?, kargo_tarihi = ? WHERE id = ?""", 
                                       (yeni_statü, yeni_kargo_no, yeni_kargo_tarih, s_id))
                         conn.commit()
-                        log_ekle(mevcut_user, f"ID {secilen_id_listesi} kayıtlarını '{yeni_statü}' olarak toplu güncelledi.")
-                        st.success("Seçilen kayıtlar başarıyla güncellendi!")
+                        log_ekle(mevcut_user, f"{len(secilen_id_listesi)} adet kaydı '{yeni_statü}' olarak güncelledi.")
+                        st.success(f"{len(secilen_id_listesi)} kayıt başarıyla güncellendi!")
                         st.rerun()
         else:
             st.info("Sistemde henüz sipariş bulunmuyor.")
 
-    # --- 2. YENİ KAYIT & İÇERİ AKTAR ---
+    # --- DİĞER MENÜLER (DEĞİŞMEDİ) ---
     elif secim == "Yeni Kayıt & İçeri Aktar":
         t1, t2 = st.tabs(["✍️ Tek Tek Ekle", "📂 Excel/CSV Yükle"])
         with t1:
@@ -120,24 +127,25 @@ else:
                     st.success("Aktarıldı!")
                     st.rerun()
 
-    # --- 3. KAYIT SİLME (SADECE YÖNETİCİ) ---
     elif secim == "Kayıt Silme İşlemleri":
         if st.session_state['yetki'] == "Yönetici":
             st.header("🗑️ Kayıt Silme Paneli")
             df_sil = pd.read_sql_query("SELECT id, sicil_no, uye_adi FROM siparisler", conn)
-            silinecek_id = st.multiselect("Silinecek Siparişleri Seçin", df_sil['id'].tolist())
+            df_sil['sil_etiketi'] = df_sil['sicil_no'].astype(str) + " - " + df_sil['uye_adi']
+            etiket_to_id_sil = dict(zip(df_sil['sil_etiketi'], df_sil['id']))
+            
+            silinecek_etiketler = st.multiselect("Silinecek Siparişleri Seçin", df_sil['sil_etiketi'].tolist())
             if st.button("Seçili Kayıtları Kalıcı Olarak Sil"):
-                if silinecek_id:
-                    for s_id in silinecek_id:
-                        c.execute("DELETE FROM siparisler WHERE id = ?", (s_id,))
+                if silinecek_etiketler:
+                    for et in silinecek_etiketler:
+                        c.execute("DELETE FROM siparisler WHERE id = ?", (etiket_to_id_sil[et],))
                     conn.commit()
-                    log_ekle(mevcut_user, f"ID {silinecek_id} kayıtlarını sildi.")
-                    st.error("Kayıtlar silindi!")
+                    log_ekle(mevcut_user, f"{len(silinecek_etiketler)} adet kaydı sildi.")
+                    st.error("Seçilen kayıtlar silindi!")
                     st.rerun()
         else:
             st.warning("Bu alanı sadece yöneticiler kullanabilir.")
 
-    # --- 4. LOG VE EXCEL ---
     elif secim == "İşlem Geçmişi (Log)":
         st.dataframe(pd.read_sql_query("SELECT zaman, kullanici, islem FROM islem_gecmisi ORDER BY id DESC", conn), use_container_width=True)
 
