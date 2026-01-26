@@ -2,99 +2,68 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# --- 1. KULLANICI VERİTABANI ---
-USERS = {
-    "Cüneyt Orhan Varol": "fb01",
-    "Mehmet Erkin Ataş": "fb02"
-}
+# --- VERİ YÜKLEME VE HAZIRLIK ---
+def load_data(file):
+    df = pd.read_excel(file)
+    # Sütun isimlerindeki boşlukları temizle ve küçük harfe çevir
+    # Böylece 'sicil_no' hatasını bir daha almazsın
+    df.columns = df.columns.str.strip().str.lower()
+    return df
 
-# --- 2. GİRİŞ EKRANI ---
-def login():
-    st.set_page_config(page_title="FB Lojistik Giriş", layout="centered")
-    st.title("🛡️ FB Lojistik Yönetim Paneli")
+st.title("FB Lojistik Takip Sistemi")
+
+uploaded_file = st.file_uploader("Excel Dosyasını Yükleyin", type=['xlsx'])
+
+if uploaded_file:
+    df = load_data(uploaded_file)
     
-    with st.container():
-        username = st.text_input("Kullanıcı Adı")
-        password = st.text_input("Şifre", type="password")
-        
-        if st.button("Sisteme Giriş Yap"):
-            if username in USERS and USERS[username] == password:
-                st.session_state['logged_in'] = True
-                st.session_state['user_name'] = username
-                st.rerun()
-            else:
-                st.error("Kullanıcı adı veya şifre hatalı.")
-
-# --- 3. ANA UYGULAMA PANELİ ---
-def main_app():
-    st.set_page_config(page_title="FB Lojistik Takip", layout="wide")
+    # --- TOPLU ARAMA BÖLÜMÜ ---
+    st.subheader("🔍 Toplu Arama")
     
-    # --- SİDEBAR (YAN MENÜ) ---
-    st.sidebar.title(f"👤 {st.session_state['user_name']}")
-    
-    uploaded_file = st.sidebar.file_uploader("Excel Dosyasını Yükleyin", type=['xlsx'])
-    
-    if st.sidebar.button("Güvenli Çıkış"):
-        st.session_state['logged_in'] = False
-        st.rerun()
+    search_input = st.text_area(
+        "Aranacak Sicil Numaralarını girin (Alt alta yapıştırabilir veya virgülle ayırabilirsiniz):",
+        placeholder="Örn:\n12345\n67890"
+    )
 
-    if uploaded_file:
-        # Veriyi oku ve sütun isimlerini temizle
-        df = pd.read_excel(uploaded_file)
-        df.columns = df.columns.str.strip().str.lower()
-
-        # --- ESKİ ARAMA SEÇENEKLERİ (SİDEBAR) ---
-        st.sidebar.divider()
-        st.sidebar.subheader("🔎 Tekli Filtreleme")
+    if search_input:
+        # Girişi temizle: Virgülleri satır sonuna çevir, sonra satırlara böl ve boşlukları at
+        search_list = [
+            item.strip() 
+            for item in search_input.replace(',', '\n').split('\n') 
+            if item.strip()
+        ]
         
-        # Üye Adı ile Arama
-        if 'uye_adi' in df.columns:
-            uye_listesi = ["Hepsi"] + sorted(df['uye_adi'].astype(str).unique().tolist())
-            secilen_uye = st.sidebar.selectbox("Üye Seçin:", uye_listesi)
-        
-        # Sicil No ile Arama
-        search_sicil = st.sidebar.text_input("Hızlı Sicil Ara:")
-
-        # --- ANA PANEL (TOPLU ARAMA) ---
-        st.title("📦 Lojistik İşlem Merkezi")
-        
-        # Filtreleme Mantığı (Hem Sidebar hem Ana Panel)
-        filtered_df = df.copy()
-        
-        if secilen_uye != "Hepsi":
-            filtered_df = filtered_df[filtered_df['uye_adi'] == secilen_uye]
-        
-        if search_sicil:
-            filtered_df = filtered_df[filtered_df['sicil_no'].astype(str).contains(search_sicil)]
-
-        # --- YENİ TOPLU ARAMA ALANI ---
-        with st.expander("📋 TOPLU SİCİL ARAMA (Çoklu Sorgu Yapmak İçin Tıklayın)", expanded=True):
-            search_input = st.text_area("Sicil Numaralarını buraya alt alta yapıştırın:")
+        if search_list:
+            # Arama yaparken hem veri setindeki hem aranan listedeki değerleri metne (string) çeviriyoruz
+            # Bu sayede tip uyuşmazlığı (int vs str) hatası yaşanmaz
+            sonuclar = df[df['sicil_no'].astype(str).isin(search_list)]
             
-            if search_input:
-                search_list = [item.strip() for item in search_input.replace(',', '\n').split('\n') if item.strip()]
-                filtered_df = df[df['sicil_no'].astype(str).isin(search_list)]
-
-        # --- SONUÇLARI GÖSTER ---
-        st.subheader("📊 İşlem Bekleyen Kayıtlar")
-        st.write(f"Görüntülenen kayıt sayısı: {len(filtered_df)}")
-        st.dataframe(filtered_df, use_container_width=True)
-
-        if not filtered_df.empty:
-            if st.button("Listelenen Tüm Kayıtları İşle (Hazırlanıyor)"):
-                for _, r in filtered_df.iterrows():
-                    # r.get() ile güvenli veri çekme
-                    sicil = str(r.get('sicil_no', 'N/A'))
-                    uye = str(r.get('uye_adi', 'Bilinmiyor'))
-                    st.write(f"✅ Hazırlanıyor: {sicil} - {uye}")
+            st.success(f"{len(sonuclar)} kayıt bulundu.")
+            st.dataframe(sonuclar)
+            
+            # Bulunan sonuçları indirme seçeneği (Opsiyonel)
+            csv = sonuclar.to_csv(index=False).encode('utf-8')
+            st.download_button("Sonuçları CSV Olarak İndir", csv, "arama_sonuclari.csv", "text/csv")
+        else:
+            st.info("Aramak için numara girin.")
     else:
-        st.info("Lütfen sol taraftaki menüden bir Excel dosyası yükleyerek başlayın.")
+        st.write("Tüm liste görüntüleniyor (İlk 10 kayıt):")
+        st.dataframe(df.head(10))
 
-# --- 4. ÇALIŞTIRMA MANTIĞI ---
-if 'logged_in' not in st.session_state:
-    st.session_state['logged_in'] = False
-
-if not st.session_state['logged_in']:
-    login()
-else:
-    main_app()
+    # --- SİCİL KAYDETME BÖLÜMÜ (Senin 145. satırdaki mantığın) ---
+    st.divider()
+    st.subheader("📥 Yeni Kayıt İşleme")
+    
+    if st.button("Seçili Kayıtları Hazırlanıyor Olarak İşaretle"):
+        # Burada arama sonuçlarındaki verileri döngüye alıyoruz
+        for index, r in sonuclar.iterrows():
+            # .get() kullanarak sütun eksik olsa bile kodun çökmesini engelledik
+            sicil = str(r.get('sicil_no', 'N/A'))
+            uye = str(r.get('uye_adi', 'Bilinmiyor'))
+            urun = str(r.get('urunler', 'Belirtilmemiş'))
+            adet = int(r.get('adet', 1))
+            tarih = datetime.now().strftime("%d/%m/%Y")
+            durum = "Hazırlanıyor"
+            
+            # Burada veritabanına kaydetme veya listeye ekleme işlemini yapabilirsin
+            st.write(f"İşleniyor: {sicil} - {uye}")
