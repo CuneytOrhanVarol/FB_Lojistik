@@ -5,7 +5,7 @@ from datetime import datetime
 import io
 
 # --- VERİTABANI BAĞLANTISI ---
-conn = sqlite3.connect('fb_operasyon_merkezi_v3.db', check_same_thread=False)
+conn = sqlite3.connect('fb_operasyon_merkezi_v2.db', check_same_thread=False)
 c = conn.cursor()
 
 c.execute('''CREATE TABLE IF NOT EXISTS siparisler (
