@@ -9,12 +9,22 @@ import plotly.express as px
 conn = sqlite3.connect('fb_operasyon_merkezi_v2.db', check_same_thread=False)
 c = conn.cursor()
 
-# Tabloyu güncel özelliklerle başlatıyoruz (maliyet ve odeme_durumu eklendi)
+# Tabloyu başlat
 c.execute('''CREATE TABLE IF NOT EXISTS siparisler (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     sicil_no TEXT, uye_adi TEXT, urunler TEXT, adet INTEGER DEFAULT 1,
     durum TEXT, kargo_no TEXT, kargo_tarihi TEXT, tarih TEXT,
     birim_maliyet REAL DEFAULT 0.0, odeme_durumu TEXT DEFAULT 'Bekliyor')''')
+
+# --- KRİTİK HATA DÜZELTME: Sütun Kontrolü ---
+# Eğer veritabanı eskiyse ve sütunlar yoksa burası otomatik ekler
+try:
+    c.execute("ALTER TABLE siparisler ADD COLUMN birim_maliyet REAL DEFAULT 0.0")
+    c.execute("ALTER TABLE siparisler ADD COLUMN odeme_durumu TEXT DEFAULT 'Bekliyor'")
+    conn.commit()
+except:
+    # Sütunlar zaten varsa hata verir, burayı sessizce geçiyoruz
+    pass
 
 c.execute('''CREATE TABLE IF NOT EXISTS islem_gecmisi (
     id INTEGER PRIMARY KEY AUTOINCREMENT, kullanici TEXT, islem TEXT, zaman TEXT)''')
@@ -29,7 +39,6 @@ KULLANICILAR = {
 YONETICILER = ["Cüneyt Orhan Varol", "Mehmet Erkin Ataş", "Ersen Avcı", "Simay Önder"]
 DURUMLAR = ["Hazırlanıyor", "Kuker hazırlıyor", "İKBA Kristal hazırlıyor", "İpek Kutu'ya gönderildi", "Kargoda", "Kulüpten Teslim", "Tamamlandı"]
 
-# Tedarikçi - Durum Eşleşmesi (Hakediş Hesaplama İçin)
 TEDARIKCI_MAP = {
     "Kuker hazırlıyor": "Engin Bey",
     "İKBA Kristal hazırlıyor": "Mevlüt Bey",
@@ -42,10 +51,10 @@ def log_ekle(kullanici, islem):
     conn.commit()
 
 # --- ARAYÜZ ---
-st.set_page_config(page_title="FB Operasyon v5", layout="wide")
+st.set_page_config(page_title="FB Operasyon v5.1", layout="wide")
 
 if 'kullanici' not in st.session_state:
-    st.title("🛡️ FB Operasyon Merkezi v5")
+    st.title("🛡️ FB Operasyon Merkezi v5.1")
     user = st.selectbox("Kullanıcı Seçin", list(KULLANICILAR.keys()))
     sifre = st.text_input("Şifre", type="password")
     if st.button("Sisteme Giriş Yap"):
@@ -89,7 +98,6 @@ else:
         df = pd.read_sql_query(query, conn, params=params)
 
         if not df.empty:
-            # Kargo Linki Oluşturma
             df['Kargo Takip'] = df['kargo_no'].apply(lambda x: f"https://kargotakip.yurticikargo.com/query?no={x}" if x else "")
             
             st.dataframe(df, column_config={
@@ -98,7 +106,6 @@ else:
                 "tarih": "📅 Kayıt"
             }, use_container_width=True, hide_index=True)
 
-            # Toplu Güncelleme
             with st.form("guncelle_form"):
                 st.subheader("🛠️ Statü Güncelle")
                 df['etiket'] = df['id'].astype(str) + " | " + df['uye_adi']
@@ -120,20 +127,22 @@ else:
                         st.success("Başarılı!")
                         st.rerun()
 
-    # --- 2. FİNANSAL ANALİZ (YÖNETİCİ ÖZEL) ---
+    # --- 2. FİNANSAL ANALİZ ---
     elif secim == "💰 Finansal Analiz":
         st.header("💰 Tedarikçi Hakediş ve Maliyet")
         if st.session_state['yetki'] == "Yönetici":
             df_fin = pd.read_sql_query("SELECT * FROM siparisler", conn)
             if not df_fin.empty:
-                # Tedarikçi ataması yap
                 df_fin['Tedarikçi'] = df_fin['durum'].map(TEDARIKCI_MAP).fillna("Diğer/Kulüp")
+                # Hata önleyici: Eğer adet veya maliyet boşsa 0 kabul et
+                df_fin['adet'] = pd.to_numeric(df_fin['adet'], errors='coerce').fillna(1)
+                df_fin['birim_maliyet'] = pd.to_numeric(df_fin['birim_maliyet'], errors='coerce').fillna(0)
+                
                 df_fin['Toplam'] = df_fin['adet'] * df_fin['birim_maliyet']
                 
-                # Özet Tablo
                 ozet = df_fin.groupby('Tedarikçi')['Toplam'].sum().reset_index()
                 st.subheader("📊 Tedarikçi Bazlı Toplam Borçlanma")
-                st.table(ozet)
+                st.dataframe(ozet, use_container_width=True)
                 
                 fig_fin = px.bar(ozet, x='Tedarikçi', y='Toplam', color='Tedarikçi', title="Ödeme Dağılımı (₺)")
                 st.plotly_chart(fig_fin, use_container_width=True)
@@ -142,7 +151,7 @@ else:
         else:
             st.warning("Bu alanı görmeye yetkiniz yok.")
 
-    # --- 3. YENİ KAYIT ---
+    # ... (Diğer menüler: Yeni Kayıt, Kayıt Silme, Log aynı kalıyor)
     elif secim == "📂 Yeni Kayıt / Aktar":
         t1, t2 = st.tabs(["✍️ Tekil", "📂 Excel"])
         with t1:
@@ -158,11 +167,10 @@ else:
             if up and st.button("Aktar"):
                 df_up = pd.read_excel(up)
                 for _, r in df_up.iterrows():
-                    c.execute("INSERT INTO siparisler (sicil_no, uye_adi, urunler, durum, tarih) VALUES (?,?,?,?,?)",
-                              (str(r.get('sicil_no','')), str(r.get('uye_adi','')), str(r.get('urunler','')), "Hazırlanıyor", datetime.now().strftime("%d/%m/%Y")))
+                    c.execute("INSERT INTO siparisler (sicil_no, uye_adi, urunler, durum, tarih, birim_maliyet) VALUES (?,?,?,?,?,?)",
+                              (str(r.get('sicil_no','')), str(r.get('uye_adi','')), str(r.get('urunler','')), "Hazırlanıyor", datetime.now().strftime("%d/%m/%Y"), 0.0))
                 conn.commit(); st.success("Aktarıldı!"); st.rerun()
 
-    # --- 4. KAYIT SİLME (YÖNETİCİ ÖZEL) ---
     elif secim == "🗑️ Kayıt Silme":
         st.header("🗑️ Kayıt Silme Paneli")
         if st.session_state['yetki'] == "Yönetici":
@@ -182,7 +190,7 @@ else:
                         st.rerun()
                 
                 st.divider()
-                if st.checkbox("🔥 Tüm Veritabanını Temizle (DİKKAT!)"):
+                if st.checkbox("🔥 Tüm Veritabanını Temizle"):
                     if st.button("HER ŞEYİ SİL"):
                         c.execute("DELETE FROM siparisler")
                         conn.commit()
@@ -193,7 +201,6 @@ else:
         else:
             st.warning("Bu yetki sadece yöneticilerdedir.")
 
-    # --- 5. LOG VE ÇIKIŞ ---
     elif secim == "🕒 İşlem Geçmişi":
         st.dataframe(pd.read_sql_query("SELECT * FROM islem_gecmisi ORDER BY id DESC", conn), use_container_width=True)
 
