@@ -1,7 +1,8 @@
 from datetime import datetime
 import pandas as pd
 import streamlit as st
-from aktarim import kayit_ekle_aktar, verileri_getir
+# Yeni eklediğimiz siparis_durum_guncelle fonksiyonunu da çağırıyoruz
+from aktarim import kayit_ekle_aktar, verileri_getir, siparis_durum_guncelle
 
 # 1. Sayfa Ayarları
 st.set_page_config(page_title="FB Lojistik - Üye Sipariş Takip", layout="wide")
@@ -67,7 +68,36 @@ with st.sidebar.expander("📝 Yeni Üye Siparişi Ekle"):
             else:
                 st.error("Yıldızlı (*) alanlar zorunludur!")
 
-# 4. ANA EKRAN - Filtrelenmiş Verileri Listeleme
+# 4. YAN MENÜ - SİPARİŞ DURUMU GÜNCELLEME ALANI (YENİ)
+with st.sidebar.expander("🔄 Sipariş Durumu Güncelle"):
+    with st.form(key="guncelleme_formu", clear_on_submit=True):
+        guncelle_id = st.text_input("Güncellenecek Sipariş ID*")
+        guncelle_durum = st.selectbox("Yeni Durum*", durum_secenekleri[1:])
+        guncelle_kargo = st.text_input(
+            "Yeni Kargo No (Değişmeyecekse Boş Bırakın)"
+        )
+
+        guncelle_butonu = st.form_submit_button("Durumu Güncelle")
+
+        if guncelle_butonu:
+            if guncelle_id:
+                # aktarim.py'deki fonksiyonu çağırıp sonucu kontrol ediyoruz
+                basarili_mi = siparis_durum_guncelle(
+                    guncelle_id, guncelle_durum, guncelle_kargo
+                )
+                if basarili_mi:
+                    st.success(
+                        f"ID: {guncelle_id} başarıyla '{guncelle_durum}' yapıldı!"
+                    )
+                    st.rerun()
+                else:
+                    st.error(
+                        f"Sipariş ID ({guncelle_id}) bulunamadı. Lütfen kontrol edin."
+                    )
+            else:
+                st.error("Lütfen Sipariş ID giriniz.")
+
+# 5. ANA EKRAN - Filtrelenmiş Verileri Listeleme
 st.subheader("📊 Üye Gönderim Listesi")
 df_siparisler = verileri_getir()
 
@@ -98,7 +128,6 @@ if not df_siparisler.empty:
             .str.contains(ara_uye_adi, case=False, na=False)
         ]
 
-    # ÇOKLU ÜRÜN FİLTRELEME MANTIĞI (DÜZELTİLDİ)
     if ara_urunler:
         df_filtrelenmis = df_filtrelenmis[
             df_filtrelenmis["Ürün"].isin(ara_urunler)
@@ -125,7 +154,7 @@ if not df_siparisler.empty:
 else:
     st.info("Henüz kaydedilmiş bir üye siparişi bulunmuyor.")
 
-# 5. Toplu Veri Aktarım Alanı
+# 6. Toplu Veri Aktarım Alanı
 st.markdown("---")
 st.subheader("📥 Excel'den Toplu Veri Aktarımı")
 yuklenen_dosya = st.file_uploader(
