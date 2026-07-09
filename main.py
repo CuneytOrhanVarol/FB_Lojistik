@@ -2,7 +2,8 @@ from datetime import datetime
 import io
 import pandas as pd
 import streamlit as st
-from aktarim import kayit_ekle_aktar, verileri_getir, siparis_durum_guncelle
+# Yeni eklediğimiz uye_durum_guncelle fonksiyonunu çağırıyoruz
+from aktarim import kayit_ekle_aktar, verileri_getir, uye_durum_guncelle
 
 # 1. Sayfa Ayarları
 st.set_page_config(page_title="FB Lojistik - Üye Sipariş Takip", layout="wide")
@@ -67,10 +68,10 @@ with st.sidebar.expander("📝 Yeni Üye Siparişi Ekle"):
             else:
                 st.error("Yıldızlı (*) alanlar zorunludur!")
 
-# 4. YAN MENÜ - SİPARİŞ DURUMU GÜNCELLEME ALANI
-with st.sidebar.expander("🔄 Sipariş Durumu Güncelle"):
+# 4. YAN MENÜ - ÜYE NO İLE SİPARİŞ DURUMU GÜNCELLEME ALANI (GÜNCELLENDİ)
+with st.sidebar.expander("🔄 Üye Sipariş Durumu Güncelle"):
     with st.form(key="guncelleme_formu", clear_on_submit=True):
-        guncelle_id = st.text_input("Güncellenecek Sipariş ID*")
+        guncelle_uye_no = st.text_input("Güncellenecek Üye No*")
         guncelle_durum = st.selectbox("Yeni Durum*", durum_secenekleri[1:])
         guncelle_kargo = st.text_input(
             "Yeni Kargo No (Değişmeyecekse Boş Bırakın)"
@@ -79,27 +80,27 @@ with st.sidebar.expander("🔄 Sipariş Durumu Güncelle"):
         guncelle_butonu = st.form_submit_button("Durumu Güncelle")
 
         if guncelle_butonu:
-            if guncelle_id:
-                basarili_mi = siparis_durum_guncelle(
-                    guncelle_id, guncelle_durum, guncelle_kargo
+            if guncelle_uye_no:
+                # aktarim.py'deki yeni fonksiyonumuzu çağırıyoruz
+                basarili_mi = uye_durum_guncelle(
+                    guncelle_uye_no, guncelle_durum, guncelle_kargo
                 )
                 if basarili_mi:
                     st.success(
-                        f"ID: {guncelle_id} başarıyla '{guncelle_durum}' yapıldı!"
+                        f"Üye No: {guncelle_uye_no} ait en güncel sipariş başarıyla '{guncelle_durum}' yapıldı!"
                     )
                     st.rerun()
                 else:
                     st.error(
-                        f"Sipariş ID ({guncelle_id}) bulunamadı. Lütfen kontrol edin."
+                        f"Üye No ({guncelle_uye_no}) sistemde bulunamadı. Lütfen kontrol edin."
                     )
             else:
-                st.error("Lütfen Sipariş ID giriniz.")
+                st.error("Lütfen Üye No giriniz.")
 
 
-# 5. KRİTİK GECİKME VE SLA TAKİP SİSTEMİ (Tıklanabilir Pop-up Özelliği Eklendi)
+# 5. KRİTİK GECİKME VE SLA TAKİP SİSTEMİ
 df_siparisler = verileri_getir()
 
-# Detay penceresini çizen yardımcı fonksiyon
 @st.dialog("📋 Sipariş Detay Kartı")
 def siparis_detayini_goster(siparis_verisi):
     st.write(f"**🔢 Sipariş ID:** {siparis_verisi['Sipariş ID']}")
@@ -143,11 +144,9 @@ if not df_siparisler.empty:
                         f"En az **3 gündür** 'Hazırlanıyor' aşamasında bekleyen siparişler var! "
                         f"Detay için ID numarasına tıklayın:"
                     )
-                    # Geciken ID'leri tıklanabilir butonlar halinde yan yana diziyoruz
                     cols_ids = st.columns(min(len(gecikmis_hazirlik), 6))
                     for idx, row in gecikmis_hazirlik.reset_index().iterrows():
                         col_target = cols_ids[idx % 6]
-                        # Butona basıldığında yukarıdaki pop-up fonksiyonunu tetikliyoruz
                         if col_target.button(f"🆔 {row['Sipariş ID']}", key=f"haz_btn_{row['Sipariş ID']}"):
                             siparis_detayini_goster(row)
 
