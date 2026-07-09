@@ -1,6 +1,4 @@
-Traceback:
-File "/mount/src/fb_lojistik/main.py", line 6, in <module>
-    from aktarim import kayit_ekle_aktar
+
 from datetime import datetime
 import streamlit as st
 # Sizin kodunuzda hata veren kritik import satırı:
