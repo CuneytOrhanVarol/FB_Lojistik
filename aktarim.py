@@ -5,7 +5,7 @@ EXCEL_FILE = "siparisler.xlsx"
 
 
 def excel_kontrol_et():
-    """Excel dosyası yoksa üyelik sistemine uygun şablon olarak oluşturur."""
+    """Excel dosyası yoksa kargo takipli şablon olarak oluşturur."""
     if not os.path.exists(EXCEL_FILE):
         df = pd.DataFrame(
             columns=[
@@ -15,14 +15,17 @@ def excel_kontrol_et():
                 "Ürün",
                 "Adet",
                 "Durum",
+                "Kargo Takip No",  # Yeni eklenen sütun
                 "Tarih",
             ]
         )
         df.to_excel(EXCEL_FILE, index=False)
 
 
-def kayit_ekle_aktar(siparis_id, uye_no, uye_adi, urun, adet, durum, tarih):
-    """Yeni üye siparişini Excel dosyasına ekler."""
+def kayit_ekle_aktar(
+    siparis_id, uye_no, uye_adi, urun, adet, durum, kargo_no, tarih
+):
+    """Yeni üye siparişini kargo bilgisiyle birlikte Excel'e ekler."""
     excel_kontrol_et()
 
     # Mevcut verileri oku
@@ -38,6 +41,7 @@ def kayit_ekle_aktar(siparis_id, uye_no, uye_adi, urun, adet, durum, tarih):
                 "Ürün": urun,
                 "Adet": adet,
                 "Durum": durum,
+                "Kargo Takip No": kargo_no,  # Yeni eklenen alan
                 "Tarih": tarih,
             }
         ]
