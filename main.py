@@ -2,7 +2,6 @@ from datetime import datetime
 import io
 import pandas as pd
 import streamlit as st
-# Yeni eklediğimiz uye_durum_guncelle fonksiyonunu çağırıyoruz
 from aktarim import kayit_ekle_aktar, verileri_getir, uye_durum_guncelle
 
 # 1. Sayfa Ayarları
@@ -68,7 +67,7 @@ with st.sidebar.expander("📝 Yeni Üye Siparişi Ekle"):
             else:
                 st.error("Yıldızlı (*) alanlar zorunludur!")
 
-# 4. YAN MENÜ - ÜYE NO İLE SİPARİŞ DURUMU GÜNCELLEME ALANI (GÜNCELLENDİ)
+# 4. YAN MENÜ - ÜYE NO İLE SİPARİŞ DURUMU GÜNCELLEME ALANI
 with st.sidebar.expander("🔄 Üye Sipariş Durumu Güncelle"):
     with st.form(key="guncelleme_formu", clear_on_submit=True):
         guncelle_uye_no = st.text_input("Güncellenecek Üye No*")
@@ -81,7 +80,6 @@ with st.sidebar.expander("🔄 Üye Sipariş Durumu Güncelle"):
 
         if guncelle_butonu:
             if guncelle_uye_no:
-                # aktarim.py'deki yeni fonksiyonumuzu çağırıyoruz
                 basarili_mi = uye_durum_guncelle(
                     guncelle_uye_no, guncelle_durum, guncelle_kargo
                 )
@@ -101,18 +99,25 @@ with st.sidebar.expander("🔄 Üye Sipariş Durumu Güncelle"):
 # 5. KRİTİK GECİKME VE SLA TAKİP SİSTEMİ
 df_siparisler = verileri_getir()
 
+
 @st.dialog("📋 Sipariş Detay Kartı")
 def siparis_detayini_goster(siparis_verisi):
     st.write(f"**🔢 Sipariş ID:** {siparis_verisi['Sipariş ID']}")
-    st.write(f"**👤 Üye Adı Soyadı:** {siparis_verisi['Üye Adı Soyadı']} (No: {siparis_verisi['Üye No']})")
+    st.write(
+        f"**👤 Üye Adı Soyadı:** {siparis_verisi['Üye Adı Soyadı']} (No: {siparis_verisi['Üye No']})"
+    )
     st.write(f"**📦 Sipariş Edilen Ürün:** {siparis_verisi['Ürün']}")
     st.write(f"**🔢 Adet:** {siparis_verisi['Adet']}")
     st.write(f"**🚦 Güncel Durum:** {siparis_verisi['Durum']}")
     st.write(f"**📅 Kayıt Tarihi:** {siparis_verisi['Tarih']}")
-    if pd.notna(siparis_verisi['Kargo Takip No']) and str(siparis_verisi['Kargo Takip No']).strip() != "":
+    if (
+        pd.notna(siparis_verisi["Kargo Takip No"])
+        and str(siparis_verisi["Kargo Takip No"]).strip() != ""
+    ):
         st.write(f"**🚚 Kargo No:** {siparis_verisi['Kargo Takip No']}")
     else:
         st.write("**🚚 Kargo No:** Henüz girilmemiş")
+
 
 if not df_siparisler.empty:
     try:
@@ -147,7 +152,10 @@ if not df_siparisler.empty:
                     cols_ids = st.columns(min(len(gecikmis_hazirlik), 6))
                     for idx, row in gecikmis_hazirlik.reset_index().iterrows():
                         col_target = cols_ids[idx % 6]
-                        if col_target.button(f"🆔 {row['Sipariş ID']}", key=f"haz_btn_{row['Sipariş ID']}"):
+                        if col_target.button(
+                            f"🆔 {row['Sipariş ID']}",
+                            key=f"haz_btn_{row['Sipariş ID']}",
+                        ):
                             siparis_detayini_goster(row)
 
             with col_alert2:
@@ -160,13 +168,15 @@ if not df_siparisler.empty:
                     cols_ids_kargo = st.columns(min(len(gecikmis_kargo), 6))
                     for idx, row in gecikmis_kargo.reset_index().iterrows():
                         col_target = cols_ids_kargo[idx % 6]
-                        if col_target.button(f"🆔 {row['Sipariş ID']}", key=f"krg_btn_{row['Sipariş ID']}"):
+                        if col_target.button(
+                            f"🆔 {row['Sipariş ID']}",
+                            key=f"krg_btn_{row['Sipariş ID']}",
+                        ):
                             siparis_detayini_goster(row)
 
             st.markdown("---")
     except Exception as e:
         pass
-
 
 # 6. ANA EKRAN - Filtrelenmiş Verileri Listeleme
 st.subheader("📊 Üye Gönderim Listesi")
