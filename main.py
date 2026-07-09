@@ -96,34 +96,41 @@ with st.sidebar.expander("🔄 Sipariş Durumu Güncelle"):
                 st.error("Lütfen Sipariş ID giriniz.")
 
 
-# 5. KRİTİK GECİKME VE SLA TAKİP SİSTEMİ (YENİ BÖLÜM)
+# 5. KRİTİK GECİKME VE SLA TAKİP SİSTEMİ (Tıklanabilir Pop-up Özelliği Eklendi)
 df_siparisler = verileri_getir()
+
+# Detay penceresini çizen yardımcı fonksiyon
+@st.dialog("📋 Sipariş Detay Kartı")
+def siparis_detayini_goster(siparis_verisi):
+    st.write(f"**🔢 Sipariş ID:** {siparis_verisi['Sipariş ID']}")
+    st.write(f"**👤 Üye Adı Soyadı:** {siparis_verisi['Üye Adı Soyadı']} (No: {siparis_verisi['Üye No']})")
+    st.write(f"**📦 Sipariş Edilen Ürün:** {siparis_verisi['Ürün']}")
+    st.write(f"**🔢 Adet:** {siparis_verisi['Adet']}")
+    st.write(f"**🚦 Güncel Durum:** {siparis_verisi['Durum']}")
+    st.write(f"**📅 Kayıt Tarihi:** {siparis_verisi['Tarih']}")
+    if pd.notna(siparis_verisi['Kargo Takip No']) and str(siparis_verisi['Kargo Takip No']).strip() != "":
+        st.write(f"**🚚 Kargo No:** {siparis_verisi['Kargo Takip No']}")
+    else:
+        st.write("**🚚 Kargo No:** Henüz girilmemiş")
 
 if not df_siparisler.empty:
     try:
-        # Tarih sütununu datetime formatına güvenli bir şekilde çeviriyoruz
         df_siparisler["Tarih_DT"] = pd.to_datetime(
             df_siparisler["Tarih"], errors="coerce"
         )
         bugun = pd.Timestamp(datetime.now().date())
-
-        # Geçen gün sayısını hesapla
         df_siparisler["Gecen_Gun"] = (bugun - df_siparisler["Tarih_DT"]).dt.days
 
-        # KRİTİK DURUMLAR:
-        # 1. Durumu "Hazırlanıyor" olan ve 3 günden fazla bekleyenler
         gecikmis_hazirlik = df_siparisler[
             (df_siparisler["Durum"] == "Hazırlanıyor")
             & (df_siparisler["Gecen_Gun"] >= 3)
         ]
 
-        # 2. Durumu "Yolda" olan ve 5 günden fazla teslim edilmeyenler
         gecikmis_kargo = df_siparisler[
             (df_siparisler["Durum"] == "Yolda")
             & (df_siparisler["Gecen_Gun"] >= 5)
         ]
 
-        # Eğer herhangi bir gecikme varsa ekrana renkli uyarı kutuları basalım
         if not gecikmis_hazirlik.empty or not gecikmis_kargo.empty:
             st.subheader("⚠️ Lojistik Aksiyon Gerekli!")
 
@@ -134,27 +141,31 @@ if not df_siparisler.empty:
                     st.error(
                         f"🚨 **Hazırlık Gecikmesi ({len(gecikmis_hazirlik)} Sipariş):**\n"
                         f"En az **3 gündür** 'Hazırlanıyor' aşamasında bekleyen siparişler var! "
-                        f"Lütfen paketleme birimiyle görüşün."
+                        f"Detay için ID numarasına tıklayın:"
                     )
-                    # İstenirse geciken ID'leri küçük metin olarak basabiliriz
-                    st.caption(
-                        f"Geciken ID'ler: {', '.join(gecikmis_hazirlik['Sipariş ID'].astype(str).tolist())}"
-                    )
+                    # Geciken ID'leri tıklanabilir butonlar halinde yan yana diziyoruz
+                    cols_ids = st.columns(min(len(gecikmis_hazirlik), 6))
+                    for idx, row in gecikmis_hazirlik.reset_index().iterrows():
+                        col_target = cols_ids[idx % 6]
+                        # Butona basıldığında yukarıdaki pop-up fonksiyonunu tetikliyoruz
+                        if col_target.button(f"🆔 {row['Sipariş ID']}", key=f"haz_btn_{row['Sipariş ID']}"):
+                            siparis_detayini_goster(row)
 
             with col_alert2:
                 if not gecikmis_kargo.empty:
                     st.warning(
                         f"📦 **Kargo Teslimat Gecikmesi ({len(gecikmis_kargo)} Sipariş):**\n"
                         f"En az **5 gündür** 'Yolda' görünen ve teslim edilmeyen kargolar var! "
-                        f"Lütfen kargo firmasıyla iletişime geçin."
+                        f"Detay için ID numarasına tıklayın:"
                     )
-                    st.caption(
-                        f"Geciken ID'ler: {', '.join(gecikmis_kargo['Sipariş ID'].astype(str).tolist())}"
-                    )
+                    cols_ids_kargo = st.columns(min(len(gecikmis_kargo), 6))
+                    for idx, row in gecikmis_kargo.reset_index().iterrows():
+                        col_target = cols_ids_kargo[idx % 6]
+                        if col_target.button(f"🆔 {row['Sipariş ID']}", key=f"krg_btn_{row['Sipariş ID']}"):
+                            siparis_detayini_goster(row)
 
             st.markdown("---")
     except Exception as e:
-        # Tarih formatı dönüşümünde hata oluşursa uygulamanın çökmesini engeller
         pass
 
 
@@ -196,7 +207,6 @@ if not df_siparisler.empty:
     if ara_durum != "Hepsi":
         df_filtrelenmis = df_filtrelenmis[df_filtrelenmis["Durum"] == ara_durum]
 
-    # Ekranı yormaması için arka planda hesaplanan DT sütunlarını göstermiyoruz
     ekran_df = df_filtrelenmis.drop(
         columns=["Tarih_DT", "Gecen_Gun"], errors="ignore"
     )
