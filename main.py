@@ -254,7 +254,8 @@ else:
             if df.empty:
                 st.warning("Kayıt bulunamadı.")
             else:
-                df.insert(0, "Seç", False)
+                if "Seç" not in df.columns:
+    df.insert(0, "Seç", False)
 
                 edited_df = st.data_editor(
                     df,
