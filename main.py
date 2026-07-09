@@ -33,6 +33,7 @@ with st.sidebar.form(key="siparis_formu", clear_on_submit=True):
     durum = st.selectbox(
         "Sipariş Durumu", ["Hazırlanıyor", "Yolda", "Teslim Edildi"]
     )
+    kargo_no = st.text_input("Kargo Takip No")  # Yeni eklenen input alanı
     tarih = st.date_input("Tarih", datetime.now())
 
     gonder_butonu = st.form_submit_button(label="Siparişi Kaydet")
@@ -40,6 +41,7 @@ with st.sidebar.form(key="siparis_formu", clear_on_submit=True):
 # Form gönderildiğinde çalışacak kısım
 if gonder_butonu:
     if siparis_id and uye_no and uye_adi:
+        # Fonksiyona kargo_no argümanını da gönderiyoruz
         kayit_ekle_aktar(
             siparis_id,
             uye_no,
@@ -47,6 +49,7 @@ if gonder_butonu:
             urun,
             adet,
             durum,
+            kargo_no,
             tarih.strftime("%Y-%m-%d"),
         )
         st.sidebar.success(f"{siparis_id} nolu sipariş başarıyla eklendi!")
@@ -78,8 +81,9 @@ st.write(
     "Elinizdeki mevcut Excel dosyasını yükleyerek sisteme toplu aktarım yapabilirsiniz."
 )
 
+# Sütun uyarı metnine Kargo Takip No eklendi
 yuklenen_dosya = st.file_uploader(
-    "Sütunları 'Sipariş ID, Üye No, Üye Adı Soyadı, Ürün, Adet, Durum, Tarih' olan Excel dosyasını seçin",
+    "Sütunları 'Sipariş ID, Üye No, Üye Adı Soyadı, Ürün, Adet, Durum, Kargo Takip No, Tarih' olan Excel dosyasını seçin",
     type=["xlsx"],
 )
 
@@ -87,6 +91,7 @@ if yuklenen_dosya is not None:
     try:
         df_yuklenen = pd.read_excel(yuklenen_dosya)
 
+        # Kontrol edilecek listeye Kargo Takip No eklendi
         gerekli_sutunlar = [
             "Sipariş ID",
             "Üye No",
@@ -94,6 +99,7 @@ if yuklenen_dosya is not None:
             "Ürün",
             "Adet",
             "Durum",
+            "Kargo Takip No",
             "Tarih",
         ]
         eksik_sutunlar = [
