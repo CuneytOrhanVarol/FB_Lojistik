@@ -1,5 +1,5 @@
 from datetime import datetime
-import io  # Excel dosyasını hafızada oluşturmak için ekledik
+import io
 import pandas as pd
 import streamlit as st
 from aktarim import kayit_ekle_aktar, verileri_getir, siparis_durum_guncelle
@@ -19,7 +19,6 @@ ara_siparis_id = st.sidebar.text_input("Sipariş No / ID ile Ara").strip()
 ara_uye_no = st.sidebar.text_input("Üye No ile Ara").strip()
 ara_uye_adi = st.sidebar.text_input("Üye Adı Soyadı ile Ara").strip()
 
-# ÇOKLU ÜRÜN SEÇİM ALANI
 urun_secenekleri = [
     "Üyelik Kiti",
     "Üyelik Rozeti",
@@ -96,9 +95,71 @@ with st.sidebar.expander("🔄 Sipariş Durumu Güncelle"):
             else:
                 st.error("Lütfen Sipariş ID giriniz.")
 
-# 5. ANA EKRAN - Filtrelenmiş Verileri Listeleme
-st.subheader("📊 Üye Gönderim Listesi")
+
+# 5. KRİTİK GECİKME VE SLA TAKİP SİSTEMİ (YENİ BÖLÜM)
 df_siparisler = verileri_getir()
+
+if not df_siparisler.empty:
+    try:
+        # Tarih sütununu datetime formatına güvenli bir şekilde çeviriyoruz
+        df_siparisler["Tarih_DT"] = pd.to_datetime(
+            df_siparisler["Tarih"], errors="coerce"
+        )
+        bugun = pd.Timestamp(datetime.now().date())
+
+        # Geçen gün sayısını hesapla
+        df_siparisler["Gecen_Gun"] = (bugun - df_siparisler["Tarih_DT"]).dt.days
+
+        # KRİTİK DURUMLAR:
+        # 1. Durumu "Hazırlanıyor" olan ve 3 günden fazla bekleyenler
+        gecikmis_hazirlik = df_siparisler[
+            (df_siparisler["Durum"] == "Hazırlanıyor")
+            & (df_siparisler["Gecen_Gun"] >= 3)
+        ]
+
+        # 2. Durumu "Yolda" olan ve 5 günden fazla teslim edilmeyenler
+        gecikmis_kargo = df_siparisler[
+            (df_siparisler["Durum"] == "Yolda")
+            & (df_siparisler["Gecen_Gun"] >= 5)
+        ]
+
+        # Eğer herhangi bir gecikme varsa ekrana renkli uyarı kutuları basalım
+        if not gecikmis_hazirlik.empty or not gecikmis_kargo.empty:
+            st.subheader("⚠️ Lojistik Aksiyon Gerekli!")
+
+            col_alert1, col_alert2 = st.columns(2)
+
+            with col_alert1:
+                if not gecikmis_hazirlik.empty:
+                    st.error(
+                        f"🚨 **Hazırlık Gecikmesi ({len(gecikmis_hazirlik)} Sipariş):**\n"
+                        f"En az **3 gündür** 'Hazırlanıyor' aşamasında bekleyen siparişler var! "
+                        f"Lütfen paketleme birimiyle görüşün."
+                    )
+                    # İstenirse geciken ID'leri küçük metin olarak basabiliriz
+                    st.caption(
+                        f"Geciken ID'ler: {', '.join(gecikmis_hazirlik['Sipariş ID'].astype(str).tolist())}"
+                    )
+
+            with col_alert2:
+                if not gecikmis_kargo.empty:
+                    st.warning(
+                        f"📦 **Kargo Teslimat Gecikmesi ({len(gecikmis_kargo)} Sipariş):**\n"
+                        f"En az **5 gündür** 'Yolda' görünen ve teslim edilmeyen kargolar var! "
+                        f"Lütfen kargo firmasıyla iletişime geçin."
+                    )
+                    st.caption(
+                        f"Geciken ID'ler: {', '.join(gecikmis_kargo['Sipariş ID'].astype(str).tolist())}"
+                    )
+
+            st.markdown("---")
+    except Exception as e:
+        # Tarih formatı dönüşümünde hata oluşursa uygulamanın çökmesini engeller
+        pass
+
+
+# 6. ANA EKRAN - Filtrelenmiş Verileri Listeleme
+st.subheader("📊 Üye Gönderim Listesi")
 
 if not df_siparisler.empty:
     df_filtrelenmis = df_siparisler.copy()
@@ -135,14 +196,16 @@ if not df_siparisler.empty:
     if ara_durum != "Hepsi":
         df_filtrelenmis = df_filtrelenmis[df_filtrelenmis["Durum"] == ara_durum]
 
-    # Sonuçları göster
-    st.dataframe(df_filtrelenmis, use_container_width=True)
+    # Ekranı yormaması için arka planda hesaplanan DT sütunlarını göstermiyoruz
+    ekran_df = df_filtrelenmis.drop(
+        columns=["Tarih_DT", "Gecen_Gun"], errors="ignore"
+    )
+    st.dataframe(ekran_df, use_container_width=True)
 
-    # 📥 EXCEL DIŞARI AKTAR BUTONU (YENİ)
-    # Streamlit'in indirme butonunun Excel dosyasını algılaması için veriyi hafızada byte'a çeviriyoruz
+    # EXCEL DIŞARI AKTAR BUTONU
     buffer = io.BytesIO()
     with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
-        df_filtrelenmis.to_excel(writer, index=False, sheet_name="Filtreli Liste")
+        ekran_df.to_excel(writer, index=False, sheet_name="Filtreli Liste")
     indirilecek_veri = buffer.getvalue()
 
     st.download_button(
@@ -167,7 +230,7 @@ if not df_siparisler.empty:
 else:
     st.info("Henüz kaydedilmiş bir üye siparişi bulunmuyor.")
 
-# 6. Toplu Veri Aktarım Alanı
+# 7. Toplu Veri Aktarım Alanı
 st.markdown("---")
 st.subheader("📥 Excel'den Toplu Veri Aktarımı")
 yuklenen_dosya = st.file_uploader(
