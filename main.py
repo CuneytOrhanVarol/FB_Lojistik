@@ -1,7 +1,7 @@
 from datetime import datetime
+import io  # Excel dosyasını hafızada oluşturmak için ekledik
 import pandas as pd
 import streamlit as st
-# Yeni eklediğimiz siparis_durum_guncelle fonksiyonunu da çağırıyoruz
 from aktarim import kayit_ekle_aktar, verileri_getir, siparis_durum_guncelle
 
 # 1. Sayfa Ayarları
@@ -68,7 +68,7 @@ with st.sidebar.expander("📝 Yeni Üye Siparişi Ekle"):
             else:
                 st.error("Yıldızlı (*) alanlar zorunludur!")
 
-# 4. YAN MENÜ - SİPARİŞ DURUMU GÜNCELLEME ALANI (YENİ)
+# 4. YAN MENÜ - SİPARİŞ DURUMU GÜNCELLEME ALANI
 with st.sidebar.expander("🔄 Sipariş Durumu Güncelle"):
     with st.form(key="guncelleme_formu", clear_on_submit=True):
         guncelle_id = st.text_input("Güncellenecek Sipariş ID*")
@@ -81,7 +81,6 @@ with st.sidebar.expander("🔄 Sipariş Durumu Güncelle"):
 
         if guncelle_butonu:
             if guncelle_id:
-                # aktarim.py'deki fonksiyonu çağırıp sonucu kontrol ediyoruz
                 basarili_mi = siparis_durum_guncelle(
                     guncelle_id, guncelle_durum, guncelle_kargo
                 )
@@ -138,6 +137,20 @@ if not df_siparisler.empty:
 
     # Sonuçları göster
     st.dataframe(df_filtrelenmis, use_container_width=True)
+
+    # 📥 EXCEL DIŞARI AKTAR BUTONU (YENİ)
+    # Streamlit'in indirme butonunun Excel dosyasını algılaması için veriyi hafızada byte'a çeviriyoruz
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        df_filtrelenmis.to_excel(writer, index=False, sheet_name="Filtreli Liste")
+    indirilecek_veri = buffer.getvalue()
+
+    st.download_button(
+        label="🟢 Listeyi Excel Olarak İndir (Filtreye Göre)",
+        data=indirilecek_veri,
+        file_name=f"filtrelenmis_uye_listesi_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
     # İstatistikler
     st.markdown("---")
