@@ -199,7 +199,9 @@ if secim == "📦 Operasyon Paneli":
 
     arama = col1.text_input("İsim / sicil / telefon ara")
     durum_filtre = col2.selectbox("Durum", ["Tümü"] + DURUMLAR)
-    limit = col3.selectbox("Limit", [100, 300, 500], index=1)
+   limit = col3.selectbox("Limit", [100, 300, 500, 1000, 5000], index=1)
+sayfa = st.number_input("Sayfa No", min_value=1, value=1, step=1)
+offset = (sayfa - 1) * limit
 
     query = """
         SELECT 
@@ -238,8 +240,9 @@ if secim == "📦 Operasyon Paneli":
         query += " AND durum = ?"
         params.append(durum_filtre)
 
-    query += " ORDER BY id DESC LIMIT ?"
-    params.append(limit)
+    query += " ORDER BY id DESC LIMIT ? OFFSET ?"
+params.append(limit)
+params.append(offset)
 
     if st.button("Kayıtları Listele"):
         conn = baglan()
