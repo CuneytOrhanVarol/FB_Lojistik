@@ -1,8 +1,7 @@
 import streamlit as st
-from database import veritabani_hazirla
-from login import giris_ekrani
-from aktarim import kayit_ekle_aktar
-from temizlik import hatali_kayit_temizligi, log_ekrani
+import pandas as pd
+from database import baglan, bugun, log_ekle
+from login import DURUMLAR, TEDARIKCI_DURUMLARI
 
 st.set_page_config(page_title="FB Operasyon Merkezi", layout="wide")
 
