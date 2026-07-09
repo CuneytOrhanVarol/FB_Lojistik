@@ -1,73 +1,74 @@
-from datetime import datetime
-import streamlit as st
-from aktarim import kayit_ekle_aktar, verileri_getir
-
-st.set_page_config(page_title="FB Lojistik - Üye Sipariş Takip", layout="wide")
-
-st.title("📦 Üye Sipariş Takip Sistemi")
+# Ana Ekranın En Altına - Toplu Veri Aktarım Alanı
+st.markdown("---")
+st.subheader("📥 Excel'den Toplu Veri Aktarımı")
 st.write(
-    "Yeni üye siparişi/kiti ekleyebilir ve mevcut gönderimleri takip edebilirsiniz."
+    "Elinizdeki mevcut Excel dosyasını yükleyerek sisteme toplu aktarım yapabilirsiniz."
 )
 
-# Yan Menü (Sidebar) - Yeni Kayıt Girişi
-st.sidebar.header("📝 Yeni Üye Siparişi Ekle")
+# Dosya yükleme bileşeni
+yuklenen_dosya = st.file_uploader(
+    "Sütunları 'Sipariş ID, Üye No, Üye Adı Soyadı, Ürün, Adet, Durum, Tarih' olan Excel dosyasını seçin",
+    type=["xlsx"],
+)
 
-with st.sidebar.form(key="siparis_formu", clear_on_submit=True):
-    siparis_id = st.text_input("Sipariş No / ID")
-    uye_no = st.text_input("Üye No")  # Yeni eklenen alan
-    uye_adi = st.text_input("Üye Adı Soyadı")  # İsmi değişen alan
+if yuklenen_dosya is not None:
+    try:
+        # Yüklenen Excel dosyasını Pandas ile oku
+        df_yuklenen = pd.read_excel(yuklenen_dosya)
 
-    # Sizin belirttiğiniz yeni ürün listesi
-    urunler = [
-        "Üyelik Kiti",
-        "Üyelik Rozeti",
-        "Üyelik Sertifikası",
-        "Üyelik Kartı",
-        "Üyelik Tişörtü",
-        "Üyelik Kristal Plaket",
-    ]
-    urun = st.selectbox("Ürün Seçin", urunler)
+        # Gerekli sütunların kontrolü
+        gerekli_sutunlar = [
+            "Sipariş ID",
+            "Üye No",
+            "Üye Adı Soyadı",
+            "Ürün",
+            "Adet",
+            "Durum",
+            "Tarih",
+        ]
+        eksik_sutunlar = [
+            sut for sut in gerekli_sutunlar if sut not in df_yuklenen.columns
+        ]
 
-    adet = st.number_input("Adet", min_value=1, value=1)
-    durum = st.selectbox(
-        "Sipariş Durumu", ["Hazırlanıyor", "Yolda", "Teslim Edildi"]
-    )
-    tarih = st.date_input("Tarih", datetime.now())
+        if eksik_sutunlar:
+            st.error(
+                f"Yüklediğiniz dosyada şu sütunlar eksik: {', '.join(eksik_sutunlar)}"
+            )
+            st.warning(
+                f"Lütfen Excel dosyanızdaki sütun isimlerini tam olarak şöyle düzenleyin: {', '.join(gerekli_sutunlar)}"
+            )
+        else:
+            st.write("Yüklenecek Veri Önizlemesi:")
+            st.dataframe(df_yuklenen.head(), use_container_width=True)
 
-    gonder_butonu = st.form_submit_button(label="Siparişi Kaydet")
+            # İki farklı aktarım seçeneği sunalım
+            yontem = st.radio(
+                "Aktarım Yöntemi Seçin:",
+                (
+                    "Mevcut verilerin sonuna ekle (Üzerine yazma)",
+                    "Mevcut verileri sil, sadece bu dosyayı kaydet",
+                ),
+            )
 
-# Form gönderildiğinde çalışacak kısım
-if gonder_butonu:
-    if siparis_id and uye_no and uye_adi:
-        # aktarim.py içindeki güncel fonksiyonu çağırıyoruz
-        kayit_ekle_aktar(
-            siparis_id,
-            uye_no,
-            uye_adi,
-            urun,
-            adet,
-            durum,
-            tarih.strftime("%Y-%m-%d"),
-        )
-        st.sidebar.success(f"{siparis_id} nolu sipariş başarıyla eklendi!")
-    else:
-        st.sidebar.error("Lütfen gerekli alanları (ID, Üye No, İsim) doldurun.")
+            aktar_butonu = st.button("Verileri Sisteme Aktar")
 
-# Ana Ekran - Siparişleri Listeleme
-st.subheader("📊 Güncel Üye Gönderim Listesi")
-df_siparisler = verileri_getir()
+            if aktar_butonu:
+                if (
+                    yontem == "Mevcut verilerin sonuna ekle (Üzerine yazma)"
+                ):  # Düzeltme: "Sonuna ekle" mantığı
+                    df_mevcut = verileri_getir()
+                    df_son = pd.concat(
+                        [df_mevcut, df_yuklenen], ignore_index=True
+                    )
+                    df_son.to_excel("siparisler.xlsx", index=False)
+                else:
+                    df_yuklenen.to_excel("siparisler.xlsx", index=False)
 
-if not df_siparisler.empty:
-    # Siparişleri streamlit üzerinde tablo olarak gösteriyoruz
-    st.dataframe(df_siparisler, use_container_width=True)
+                st.success(
+                    "🎉 Veriler başarıyla aktarıldı! Sayfayı yenilemek için F5 yapabilir veya menüyü kullanabilirsiniz."
+                )
+                # Tablonun anında güncellenmesi için Streamlit'i yeniden çalıştırır
+                st.rerun()
 
-    # Basit istatistikler
-    st.markdown("---")
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Toplam Kayıt", len(df_siparisler))
-    col2.metric(
-        "Teslim Edilenler", len(df_siparisler[df_siparisler["Durum"] == "Teslim Edildi"])
-    )
-    col3.metric("Toplam Ürün Adedi", int(df_siparisler["Adet"].sum()))
-else:
-    st.info("Henüz kaydedilmiş bir üye siparişi bulunmuyor.")
+    except Exception as e:
+        st.error(f"Dosya okunurken bir hata oluştu: {e}")
