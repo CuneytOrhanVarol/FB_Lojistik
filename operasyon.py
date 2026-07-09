@@ -1,7 +1,6 @@
 import streamlit as st
 from database import veritabani_hazirla
 from login import giris_ekrani
-from operasyon import operasyon_paneli
 from aktarim import kayit_ekle_aktar
 from temizlik import hatali_kayit_temizligi, log_ekrani
 
