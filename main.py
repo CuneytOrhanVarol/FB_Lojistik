@@ -254,8 +254,35 @@ else:
             if df.empty:
                 st.warning("Kayıt bulunamadı.")
             else:
-                if "Seç" not in df.columns:
-    df.insert(0, "Seç", False)
+               if df.empty:
+    st.warning("Kayıt bulunamadı.")
+else:
+    if "Seç" not in df.columns:
+        df.insert(0, "Seç", False)
+
+    edited_df = st.data_editor(
+        df,
+        column_config={
+            "Seç": st.column_config.CheckboxColumn("Seç"),
+            "id": None,
+            "kargo_no": "Kargo No"
+        },
+        disabled=[
+            "id",
+            "sicil_no",
+            "uye_adi",
+            "telefon_no",
+            "urunler",
+            "adet",
+            "durum",
+            "kargo_tarihi",
+            "tarih",
+            "aktarim_id"
+        ],
+        use_container_width=True,
+        hide_index=True,
+        key="op_editor"
+    )
 
                 edited_df = st.data_editor(
                     df,
