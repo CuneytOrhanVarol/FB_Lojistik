@@ -18,7 +18,18 @@ ara_uye_no = st.sidebar.text_input("Üye No ile Ara").strip()
 ara_uye_adi = st.sidebar.text_input("Üye Adı Soyadı ile Ara").strip()
 
 urun_secenekleri = ["Hepsi", "Üyelik Kiti", "Üyelik Rozeti", "Üyelik Sertifikası", "Üyelik Kartı", "Üyelik Tişörtü", "Üyelik Kristal Plaket"]
-ara_urun = st.sidebar.selectbox("Ürüne Göre Filtrele", urun_secenekleri)
+# Artık selectbox yerine multiselect kullanıyoruz ve varsayılan olarak boş (yani hepsi) geliyor
+urun_secenekleri = [
+    "Üyelik Kiti",
+    "Üyelik Rozeti",
+    "Üyelik Sertifikası",
+    "Üyelik Kartı",
+    "Üyelik Tişörtü",
+    "Üyelik Kristal Plaket",
+]
+ara_urunler = st.sidebar.multiselect(
+    "Ürünlere Göre Filtrele (Birden Fazla Seçilebilir)", urun_secenekleri
+)
 
 durum_secenekleri = ["Hepsi", "Hazırlanıyor", "Yolda", "Teslim Edildi"]
 ara_durum = st.sidebar.selectbox("Duruma Göre Filtrele", durum_secenekleri)
