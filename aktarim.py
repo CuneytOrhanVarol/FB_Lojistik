@@ -1,4 +1,3 @@
-
 import os
 import pandas as pd
 
@@ -6,12 +5,13 @@ EXCEL_FILE = "siparisler.xlsx"
 
 
 def excel_kontrol_et():
-    """Excel dosyası yoksa şablon olarak oluşturur."""
+    """Excel dosyası yoksa üyelik sistemine uygun şablon olarak oluşturur."""
     if not os.path.exists(EXCEL_FILE):
         df = pd.DataFrame(
             columns=[
                 "Sipariş ID",
-                "Müşteri Adı",
+                "Üye No",
+                "Üye Adı Soyadı",
                 "Ürün",
                 "Adet",
                 "Durum",
@@ -21,8 +21,8 @@ def excel_kontrol_et():
         df.to_excel(EXCEL_FILE, index=False)
 
 
-def kayit_ekle_aktar(siparis_id, musteri, urun, adet, durum, tarih):
-    """Yeni siparişi Excel dosyasına ekler."""
+def kayit_ekle_aktar(siparis_id, uye_no, uye_adi, urun, adet, durum, tarih):
+    """Yeni üye siparişini Excel dosyasına ekler."""
     excel_kontrol_et()
 
     # Mevcut verileri oku
@@ -33,7 +33,8 @@ def kayit_ekle_aktar(siparis_id, musteri, urun, adet, durum, tarih):
         [
             {
                 "Sipariş ID": siparis_id,
-                "Müşteri Adı": musteri,
+                "Üye No": uye_no,
+                "Üye Adı Soyadı": uye_adi,
                 "Ürün": urun,
                 "Adet": adet,
                 "Durum": durum,
@@ -48,6 +49,6 @@ def kayit_ekle_aktar(siparis_id, musteri, urun, adet, durum, tarih):
 
 
 def verileri_getir():
-    """Tüm siparişleri DataFrame olarak döner."""
+    """Tüm üye siparişlerini DataFrame olarak döner."""
     excel_kontrol_et()
     return pd.read_excel(EXCEL_FILE)
